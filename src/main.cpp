@@ -1,34 +1,53 @@
 #include <Arduino.h>
-#include <SoftWire.h>
+#include <FastSoftWire.h>
 #include <Wire.h>
 
-#if 1
 int sdaPin = PIN_A0;
 int sclPin = PIN_A1;
-#else
-int sdaPin = SDA;
-int sclPin = SCL;
-#endif
 
 // I2C address of A2168
 const uint8_t BATTERY_I2C_ADDRESS = 0x0B;
+uint8_t command = 0xFF;
 
-SoftWire sw(sdaPin, sclPin);
+FastSoftWire sw(sdaPin, sclPin);
+AsyncDelay readInterval;
+
 // These buffers must be at least as large as the largest read or write you perform.
 char swTxBuffer[16];
 char swRxBuffer[16];
 
-AsyncDelay readInterval;
 
-// Print with leading zero, as expected for time
-void printTwoDigit(int n)
+String hex(int n)
 {
-    if (n < 10)
+    char buf[10] = {0};
+    sprintf(buf, "0x");
+    if (n < 16)
     {
-        Serial.print('0');
+        sprintf(buf + strlen(buf), "%d", 0);
     }
-    Serial.print(n);
+    sprintf(buf + strlen(buf), "%x", n);
+    return String(buf);
 }
+
+void onReceive(int number)
+{
+    command = Wire.read();
+}
+
+void onRequest()
+{
+    Serial.println("Command requested: " + hex(command));
+
+    if (command == 0x09) // command: voltage
+    {
+        uint16_t voltage = 12041; // mV
+        Wire.write((uint8_t)voltage);
+        Wire.write((uint8_t)(voltage >> 8));
+        Serial.println("Command 0x09 => answered");
+    }
+    command = 0xFF;
+}
+
 
 void readBattery(void)
 {
@@ -49,6 +68,8 @@ void readBattery(void)
     Serial.println("mV");
 }
 
+#define I2C_SPEED 40000
+
 void setup()
 {
     Serial.begin(57600);
@@ -61,13 +82,21 @@ void setup()
     Serial.print("    I2C address: ");
     Serial.println(int(BATTERY_I2C_ADDRESS), HEX);
 
+    // master
     sw.setTxBuffer(swTxBuffer, sizeof(swTxBuffer));
     sw.setRxBuffer(swRxBuffer, sizeof(swRxBuffer));
-    sw.setClock(40000);
+    // sw.setClock(I2C_SPEED);
+    sw.setDelay_us(0);
     sw.setTimeout(1000);
     sw.begin();
 
     readInterval.start(2000, AsyncDelay::MILLIS);
+
+    // slave
+    Wire.begin(0x0B);  // mimic a smart battery
+    // Wire.setClock(I2C_SPEED);
+    Wire.onReceive(onReceive);
+    Wire.onRequest(onRequest);
 }
 
 void loop(void)
