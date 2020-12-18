@@ -135,11 +135,11 @@ void readBattery(sbs::SBS &battery)
         case 0x23:
         case 0x2f:
         {
-            char s[33] = {0};   // max len is 32 chars + null terminator
-            battery.readString(s, sizeof(s) - 1, cmd.code);
-            for (uint8_t i = 0; i < sizeof(s); ++i) {
-                if (isprint(s[i])) {
-                    Serial.print(s[i]);
+            uint8_t buf[33] = {0};   // max len is 32 chars + null terminator
+            battery.readBlock(cmd.code, buf, sizeof(buf) - 1);
+            for (uint8_t i = 0; i < sizeof(buf); ++i) {
+                if (isprint(buf[i])) {
+                    Serial.print(buf[i]);
                 }
             }
             Serial.println();

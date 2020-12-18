@@ -101,14 +101,13 @@ const SBSCommand commandSet[COMMAND_SET_SIZE] PROGMEM = {
 const SBSCommand *SBS::m_commands = commandSet;
 
 SBS::SBS(uint8_t address)
+    : m_smbusAddress(address)
+    , m_clkSpeed(40000)
 {
-    m_smbusAddress = address;
-
-    const uint32_t smBusSpeed = 40000;
     m_bbi2c.bWire = 0; // use bit bang, not wire library
     m_bbi2c.iSDA = PIN_A0;
     m_bbi2c.iSCL = PIN_A1;
-    I2CInit(&m_bbi2c, smBusSpeed);
+    I2CInit(&m_bbi2c, m_clkSpeed);
 }
 
 uint8_t SBS::readByte(uint8_t command)
@@ -125,15 +124,23 @@ uint16_t SBS::readWord(uint8_t command)
     return w;
 }
 
-void SBS::readString(char *buf, uint8_t size, uint8_t command)
+void SBS::readBlock(uint8_t command, uint8_t *buf, uint8_t size)
 {
-    I2CReadRegister(&m_bbi2c, m_smbusAddress, command, reinterpret_cast<uint8_t *>(buf), size, true);
+    I2CReadRegister(&m_bbi2c, m_smbusAddress, command, buf, size, true);
 }
 
 void SBS::writeWord(uint8_t command, uint16_t value)
 {
     uint8_t buf[3] = {command, (uint8_t)value, (uint8_t)(value >> 8)};
     I2CWrite(&m_bbi2c, m_smbusAddress, buf, sizeof(buf));
+}
+
+void SBS::writeBlock(uint8_t command, uint8_t *buf, uint8_t size)
+{
+    uint8_t data_to_send[33] = {command};
+    const int size_limit = min(size, sizeof(data_to_send) - 1);
+    memcpy(&data_to_send[1], buf, size_limit);
+    I2CWrite(&m_bbi2c, m_smbusAddress, data_to_send, size_limit + 1);
 }
 
 SBSCommand SBS::command(const uint8_t idx)
