@@ -1,4 +1,4 @@
-#include "battery.h"
+#include "battery_util.h"
 
 void readBattery(sbs::SBS &battery)
 {
@@ -42,10 +42,16 @@ void readBattery(sbs::SBS &battery)
             break;
 
         case 0x08:
+        {
             //register is in Kelvin, convert to C
-            Serial.print(battery.readWord(cmd.code) / 10 - 273.15);
+            const uint16_t temperature = battery.readWord(cmd.code);
+            Serial.print(" [");
+            Serial.print(temperature);
+            Serial.print("]  ");
+            Serial.print(temperature / 10 - 273.15);
             Serial.println(" *C");
             break;
+        }
 
         case 0x0a:  // signed values
         case 0x0b:
@@ -159,8 +165,12 @@ void handleUserInput(sbs::SBS &battery)
     {
         const String input = Serial.readString();
 
-        if (input.length() != 5)
-        {
+        if (input == "?\n") {
+            readBattery(battery);
+            return;
+        }
+
+        if (input.length() != 5) {
             Serial.println(F("Bad input"));
             return;
         }
@@ -189,8 +199,7 @@ void handleUserInput(sbs::SBS &battery)
             ;
         const String data = Serial.readString();
 
-        if (data == "\n")
-        {
+        if (data == "\n") {
             Serial.println(F("Operation cancelled"));
             return;
         }
@@ -209,8 +218,7 @@ void handleUserInput(sbs::SBS &battery)
             ;
         const String confirmation = Serial.readString();
 
-        if (confirmation != "y\n")
-        {
+        if (confirmation != "y\n") {
             Serial.println(F("Operation cancelled"));
             return;
         }

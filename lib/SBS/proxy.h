@@ -16,6 +16,7 @@ private:
 
     static SBS m_battery;
     static uint8_t m_command;
+    static uint16_t m_word;
 };
 
 } // namespace sbs

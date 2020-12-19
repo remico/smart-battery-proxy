@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <AsyncDelay.h>
-#include "battery.h"
+#include "battery_util.h"
 #include "proxy.h"
 
 AsyncDelay readInterval;
@@ -13,7 +13,7 @@ void setup()
     Serial.print(F("    Battery SMBus address: 0x"));
     Serial.println(sbs::SBSProxy::instance()->battery().address(), HEX);
 
-    readInterval.start(2000, AsyncDelay::MILLIS);
+    readInterval.start(5000, AsyncDelay::MILLIS);
 
     // read battery
     Serial.println(F("\n++++++++++++ BATTERY ++++++++++++"));
@@ -30,5 +30,5 @@ void loop(void)
         readInterval.restart();
     }
 
-    // handleUserInput(battery);
+    handleUserInput(sbs::SBSProxy::instance()->battery());
 }
