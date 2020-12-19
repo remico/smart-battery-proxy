@@ -25,7 +25,7 @@ void readBattery(sbs::SBS &battery)
             Serial.print("0b");
             Serial.println(batteryMode, BIN);
             Serial.println(F("   ===== BatteryMode flags: ====="));
-            Serial.print(F("   @ INTERNAL_CHARGE_CONTROLLER: "));   Serial.println(0x0001 & batteryMode);
+            Serial.print(F("   @ INTERNAL_CHARGE_CONTROLLER: "));   Serial.println(bool(0x0001 & batteryMode));
             Serial.print(F("   @ PRIMARY_BATTERY_SUPPORT: "));      Serial.println(bool(0x0002 & batteryMode));
             Serial.print(F("   @ CONDITION_FLAG: "));               Serial.println(bool(0x0080 & batteryMode));
             Serial.print(F("   @ CHARGE_CONTROLLER_ENABLED: "));    Serial.println(bool(0x0100 & batteryMode));
