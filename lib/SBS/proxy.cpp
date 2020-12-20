@@ -1,6 +1,9 @@
 #include "proxy.h"
 #include <Wire.h>
 
+#define VOLTAGE_LEVEL_HIGH 12500
+#define VOLTAGE_LEVEL_LOW 9300
+
 using namespace sbs;
 
 namespace {
@@ -19,7 +22,14 @@ String hex(int n)
 } // namespace
 
 SBSProxy::SBSProxy()
-    : m_battery(SBS(BATTERY_ADDRESS_DEFAULT)), m_command(0xFF), m_current(0), m_voltage(0)
+    : m_battery(SBS(BATTERY_ADDRESS_DEFAULT))
+    , m_command(0xFF)
+    , m_current(0)
+    , m_currentAverage(0)
+    , m_voltage(0)
+    , m_cell1(0)
+    , m_cell2(0)
+    , m_cell3(0)
 {
     setCommand_0x00(0);
     setCommand_0x01(0.1 * designCapacity());
@@ -34,7 +44,13 @@ SBSProxy::SBSProxy()
     // setCommand_0x1b();
     // setCommand_0x1c();
 
-    Wire.begin(m_battery.address()); // mimic smart battery
+    // for mimic smart battery
+    Wire.begin(m_battery.address());
+
+    // disable internal pull-ups
+    digitalWrite(SDA, LOW);
+    digitalWrite(SCL, LOW);
+
     Wire.onReceive(onReceive);
     Wire.onRequest(onRequest);
 }
@@ -54,13 +70,13 @@ void SBSProxy::onReceive(const int number)
     self->setCommand(command);
 
     if (datalen) { // if smth to send
-        uint8_t buf[33] = {0};
+        uint8_t buf[32] = {0};
         for (int i = 0; i < datalen; ++i) {
             buf[i] = Wire.read();
         }
         self->battery().writeBlock(command, buf, datalen);
 
-        // and save locally
+        // and save values locally
         const uint16_t word = buf[0] | buf[1] << 8;
         switch (command) {
         case 0x00:
@@ -99,19 +115,15 @@ void SBSProxy::onReceive(const int number)
             self->setCurrent(current);
             break;
         }
+        case 0x0b: {
+            int16_t averageCurrent = self->battery().readWord(command);
+            self->setCurrentAverage(averageCurrent);
+            break;
+        }
         default:
             break;
         }
     }
-
-    // Serial.print(F("Wire data received: @ len: "));
-    // Serial.print(number);
-    // Serial.print(" @ ");
-    // Serial.print(" " + hex(command));
-    // for (int i = 0; i < datalen; ++i) {
-    //     Serial.print(" " + hex(buf[i]));
-    // }
-    // Serial.println();
 }
 
 void SBSProxy::onRequest()
@@ -157,35 +169,25 @@ void SBSProxy::onRequest()
         self->answerWord(self->voltage());
         break;
     case 0x0a: // Current, mA
-    case 0x0b: // AverageCurrent, mA
-    {
-        const int16_t current = self->current();
-        Wire.write(static_cast<uint8_t>(current));
-        Wire.write(static_cast<uint8_t>(current >> 8));
-        Serial.print(" => answered: ");
-        Serial.println(current);
+        self->answerWord(self->current());
         break;
-    }
+    case 0x0b: // AverageCurrent, mA
+        self->answerWord(self->currentAverage());
+        break;
 
     case 0x0c: // MaxError, %
         Wire.write(2);
-        Serial.print(" => answered: ");
-        Serial.println(2);
         break;
     case 0x0d: // RelativeStateOfCharge, %
     {
         const uint8_t percentage = self->capacity() * static_cast<uint32_t>(100) / self->designCapacity();
         Wire.write(percentage);
-        Serial.print(" => answered: ");
-        Serial.println(percentage);
         break;
     }
     case 0x0e: // AbsoluteStateOfCharge, %
     {
         const uint8_t percentage = self->capacity() * static_cast<uint32_t>(100) / self->designCapacity();
         Wire.write(percentage + 3);
-        Serial.print(" => answered: ");
-        Serial.println(percentage + 3);
         break;
     }
 
@@ -209,7 +211,7 @@ void SBSProxy::onRequest()
         self->answerWord(self->alarm() ? 0 : 3800);
         break;
     case 0x15: // ChargingVoltage, mV
-        self->answerWord(self->alarm() ? 0 : 12600);
+        self->answerWord(self->alarm() ? 0 : VOLTAGE_LEVEL_HIGH);
         break;
     case 0x16: // BatteryStatus
         self->answerWord(self->status());
@@ -267,21 +269,20 @@ void SBSProxy::onRequest()
         Serial.print(" => ???");
     }
 
-    self->setCommand(0xFF);
+    self->setCommand(0xFF);  // forget previous command
 }
 
 void SBSProxy::answerWord(uint16_t word)
 {
-    Wire.write(reinterpret_cast<uint8_t *>(word), 2);
-    Serial.print(" => answered: ");
-    Serial.println(word);
+    uint8_t buf[2] = {word, word >> 8};
+    Wire.write(buf, 2);
 }
 
 void SBSProxy::answerString(const char *str)
 {
-    Serial.print(" => answered: ");
-    Serial.println(str);
-    Wire.write(reinterpret_cast<const uint8_t *>(str), strlen(str));
+    uint8_t buf[32] = {0};
+    strcpy(reinterpret_cast<char *>(buf), str);
+    Wire.write(buf, sizeof(buf));
 }
 
 uint16_t SBSProxy::status() const
@@ -304,7 +305,7 @@ uint16_t SBSProxy::status() const
     if (_current >= 0 && capacity() == 100) {
         status |= BatteryStatusFlags::FULLY_CHARGED;
     }
-    if (_current > 0 && _voltage > 12600) {
+    if (_current > 0 && _voltage > VOLTAGE_LEVEL_HIGH) {
         status |= BatteryStatusFlags::OVER_CHARGED_ALARM | BatteryStatusFlags::TERMINATE_CHARGE_ALARM;
     }
 
@@ -314,8 +315,8 @@ uint16_t SBSProxy::status() const
 uint16_t SBSProxy::capacity() const
 {
     const uint16_t _voltage = voltage();
-    const uint16_t h = 12600;
-    const uint16_t l = 9300;
+    const uint16_t h = VOLTAGE_LEVEL_HIGH;
+    const uint16_t l = VOLTAGE_LEVEL_LOW;
     const int delta = _voltage - l;
     const double k = _voltage >= h ? 100 : static_cast<double>(max(0, delta)) / (h - l);
     return k * designCapacity();
@@ -324,5 +325,5 @@ uint16_t SBSProxy::capacity() const
 bool SBSProxy::alarm() const
 {
     const uint16_t _status = status();
-    return false;
+    return true;  // FIXME: true for prevent charging
 }

@@ -34,6 +34,9 @@ public:
     inline int16_t current() const { return m_current; }
     inline void setCurrent(int16_t current) { m_current = current; }
 
+    inline int16_t currentAverage() const { return m_currentAverage; }
+    inline void setCurrentAverage(int16_t current) { m_currentAverage = current; }
+
     inline uint16_t designCapacity() const { return m_designCapacity; }
 
     inline uint16_t command_0x00() const { return m_command_0x00; }
@@ -74,8 +77,9 @@ private:
     CommandCode m_command;
 
     int16_t m_current;
-    uint16_t m_voltage;
+    int16_t m_currentAverage;
 
+    uint16_t m_voltage;
     uint16_t m_cell1;
     uint16_t m_cell2;
     uint16_t m_cell3;

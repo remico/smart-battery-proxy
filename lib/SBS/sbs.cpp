@@ -108,6 +108,9 @@ SBS::SBS(uint8_t address)
     m_bbi2c.iSDA = PIN_A0;
     m_bbi2c.iSCL = PIN_A1;
     I2CInit(&m_bbi2c, m_clkSpeed);
+    //enable internal pull-ups
+    digitalWrite(m_bbi2c.iSDA, HIGH);
+    digitalWrite(m_bbi2c.iSCL, HIGH);
 }
 
 uint8_t SBS::readByte(uint8_t command)
@@ -137,7 +140,7 @@ void SBS::writeWord(uint8_t command, uint16_t value)
 
 void SBS::writeBlock(uint8_t command, uint8_t *buf, uint8_t size)
 {
-    uint8_t data_to_send[33] = {command};
+    uint8_t data_to_send[32] = {command};
     const int size_limit = min(size, sizeof(data_to_send) - 1);
     memcpy(&data_to_send[1], buf, size_limit);
     I2CWrite(&m_bbi2c, m_smbusAddress, data_to_send, size_limit + 1);
