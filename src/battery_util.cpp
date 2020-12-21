@@ -140,6 +140,7 @@ void readBattery(sbs::SBS &battery)
         case 0x22:
         case 0x23:
         case 0x2f:
+        case 0x70:
         {
             uint8_t buf[32] = {0};
             battery.readBlock(cmd.code, buf, sizeof(buf) - 1);

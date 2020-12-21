@@ -41,6 +41,7 @@ const char command_0x3c[] PROGMEM = "VoltageCellFour";
 const char command_0x3d[] PROGMEM = "VoltageCellThree";
 const char command_0x3e[] PROGMEM = "VoltageCellTwo";
 const char command_0x3f[] PROGMEM = "VoltageCellOne";
+const char command_0x70[] PROGMEM = "ManufacturerInfo";
 
 const char type_minutes[] PROGMEM = "min";
 const char type_percent[] PROGMEM = "%";
@@ -96,6 +97,7 @@ const SBSCommand commandSet[COMMAND_SET_SIZE] PROGMEM = {
     {0x3d, false, 2, command_0x3d, type_mV},
     {0x3e, false, 2, command_0x3e, type_mV},
     {0x3f, false, 2, command_0x3f, type_mV},
+    {0x70, false, 2, command_0x70, type_string},
 };
 
 const SBSCommand *SBS::m_commands = commandSet;

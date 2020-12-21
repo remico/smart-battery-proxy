@@ -4,7 +4,7 @@
 #include "BitBang_SMBus.h"
 
 #define BATTERY_ADDRESS_DEFAULT 0x0B
-#define COMMAND_SET_SIZE 38
+#define COMMAND_SET_SIZE 39
 
 namespace sbs {
 

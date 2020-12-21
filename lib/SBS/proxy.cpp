@@ -69,6 +69,9 @@ void SBSProxy::onReceive(const int number)
     const CommandCode command = Wire.read();
     self->setCommand(command);
 
+    Serial.print(F("[RC] "));
+    Serial.println(hex(command));
+
     if (datalen) { // if smth to send
         uint8_t buf[32] = {0};
         for (int i = 0; i < datalen; ++i) {
@@ -130,7 +133,7 @@ void SBSProxy::onRequest()
 {
     SBSProxy *self = SBSProxy::instance();
 
-    Serial.print(F("Requested: "));
+    Serial.print(F("  [RQ] "));
     Serial.println(hex(self->command()));
 
     switch (self->command()) {
@@ -266,7 +269,7 @@ void SBSProxy::onRequest()
         break;
 
     default:
-        Serial.print(" => ???");
+        Serial.println(F("  => ???"));
     }
 
     self->setCommand(0xFF);  // forget previous command
