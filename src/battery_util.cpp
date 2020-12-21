@@ -1,6 +1,6 @@
 #include "battery_util.h"
 
-void readBattery(sbs::SBS &battery)
+void readBattery(const sbs::SBS &battery)
 {
     for (int i = 0; i < COMMAND_SET_SIZE; ++i)
     {
@@ -68,40 +68,10 @@ void readBattery(sbs::SBS &battery)
 
         case 0x16:
         {
-            Serial.print("0b");
             const uint16_t batteryStatus = battery.readWord(cmd.code);
-            String errorCode;
-
-            switch (0x000F & batteryStatus)
-            {
-            case 0: errorCode = "OK"; break;
-            case 1: errorCode = "Busy"; break;
-            case 2: errorCode = "ReservedCommand"; break;
-            case 3: errorCode = "UnsupportedCommand"; break;
-            case 4: errorCode = "AccessDenied"; break;
-            case 5: errorCode = "Overflow/Underflow"; break;
-            case 6: errorCode = "BadSize"; break;
-            case 7: errorCode = "UnknownError"; break;
-            default: errorCode = "?";
-            }
-
+            Serial.print("0b");
             Serial.println(batteryStatus, BIN);
-            Serial.println(F("   ===== BatteryStatus flags: ====="));
-            Serial.print(F("   @ ErrorCode: "));
-            Serial.println(errorCode.c_str());
-            Serial.println(F("   ---- Status: ----"));
-            Serial.print(F("   @ FULLY DISCHARGED: ")); Serial.println(bool(0x0010 & batteryStatus));
-            Serial.print(F("   @ FULLY CHARGED: "));    Serial.println(bool(0x0020 & batteryStatus));
-            Serial.print(F("   @ DISCHARGING: "));      Serial.println(bool(0x0040 & batteryStatus));
-            Serial.print(F("   @ INITIALIZED: "));      Serial.println(bool(0x0080 & batteryStatus));
-            Serial.println(F("   ---- Alarm: ----"));
-            Serial.print(F("   @ REMAINING TIME ALARM: "));     Serial.println(bool(0x0100 & batteryStatus));
-            Serial.print(F("   @ REMAINING CAPACITY ALARM: ")); Serial.println(bool(0x0200 & batteryStatus));
-            Serial.print(F("   @ TERMINATE DISCHARGE ALARM: "));Serial.println(bool(0x0800 & batteryStatus));
-            Serial.print(F("   @ OVER TEMP ALARM: "));          Serial.println(bool(0x1000 & batteryStatus));
-            Serial.print(F("   @ TERMINATE CHARGE ALARM: "));   Serial.println(bool(0x4000 & batteryStatus));
-            Serial.print(F("   @ OVER CHARGED ALARM: "));       Serial.println(bool(0x8000 & batteryStatus));
-            Serial.println(F("   ======================"));
+            humanizeBatteryStatus(batteryStatus);
             break;
         }
 
@@ -160,19 +130,33 @@ void readBattery(sbs::SBS &battery)
     }
 }
 
-void handleUserInput(sbs::SBS &battery)
+void handleUserInput(sbs::SBSProxy *proxy)
 {
+    const sbs::SBS &battery = proxy->battery();
+
     if (Serial.available())
     {
         const String input = Serial.readString();
 
         if (input == "?\n") {
+            const bool logging = proxy->isLoggingEnabled();
+            proxy->enableLogging(false);
             readBattery(battery);
+            proxy->enableLogging(logging);
+            return;
+        }
+        if (input == "l-\n") {
+            proxy->enableLogging(false);
+            return;
+        }
+        if (input == "l+\n") {
+            proxy->enableLogging(true);
             return;
         }
 
         if (input.length() != 5) {
-            Serial.println(F("Bad input"));
+            Serial.print(F("Bad input: "));
+            Serial.println(input);
             return;
         }
 
@@ -227,4 +211,40 @@ void handleUserInput(sbs::SBS &battery)
         battery.writeWord(cmd.code, newValue);
         Serial.println("Done");
     }
+}
+
+void humanizeBatteryStatus(uint16_t batteryStatus)
+{
+    String errorCode;
+
+    switch (0x000F & batteryStatus)
+    {
+    case 0: errorCode = "OK"; break;
+    case 1: errorCode = "Busy"; break;
+    case 2: errorCode = "ReservedCommand"; break;
+    case 3: errorCode = "UnsupportedCommand"; break;
+    case 4: errorCode = "AccessDenied"; break;
+    case 5: errorCode = "Overflow/Underflow"; break;
+    case 6: errorCode = "BadSize"; break;
+    case 7: errorCode = "UnknownError"; break;
+    default: errorCode = "?";
+    }
+
+    Serial.println(F("   ===== BatteryStatus flags: ====="));
+    Serial.print(F("   @ ErrorCode: "));
+    Serial.println(errorCode.c_str());
+    Serial.println(F("   ---- Status: ----"));
+    Serial.print(F("   @ FULLY DISCHARGED: ")); Serial.println(bool(0x0010 & batteryStatus));
+    Serial.print(F("   @ FULLY CHARGED: "));    Serial.println(bool(0x0020 & batteryStatus));
+    Serial.print(F("   @ DISCHARGING: "));      Serial.println(bool(0x0040 & batteryStatus));
+    Serial.print(F("   @ INITIALIZED: "));      Serial.println(bool(0x0080 & batteryStatus));
+    Serial.println(F("   ---- Alarm: ----"));
+    Serial.print(F("   @ REMAINING TIME ALARM: "));     Serial.println(bool(0x0100 & batteryStatus));
+    Serial.print(F("   @ REMAINING CAPACITY ALARM: ")); Serial.println(bool(0x0200 & batteryStatus));
+    Serial.print(F("   @ TERMINATE DISCHARGE ALARM: "));Serial.println(bool(0x0800 & batteryStatus));
+    Serial.print(F("   @ OVER TEMP ALARM: "));          Serial.println(bool(0x1000 & batteryStatus));
+    Serial.print(F("   @ TERMINATE CHARGE ALARM: "));   Serial.println(bool(0x4000 & batteryStatus));
+    Serial.print(F("   @ OVER CHARGED ALARM: "));       Serial.println(bool(0x8000 & batteryStatus));
+    Serial.println(F("   ======================"));
+    Serial.println();
 }

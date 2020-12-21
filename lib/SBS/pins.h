@@ -1,0 +1,8 @@
+#pragma once
+
+#define BATTERY_PROXY_ENABLE PIN_A2
+#define BATTERY_PROXY_SDA SDA
+#define BATTERY_PROXY_SCL SCL
+
+#define BATTERY_SDA PIN_A0
+#define BATTERY_SCL PIN_A1

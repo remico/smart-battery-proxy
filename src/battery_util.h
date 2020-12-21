@@ -1,6 +1,8 @@
 #pragma once
 
 #include "sbs.h"
+#include "sbsproxy.h"
 
-void readBattery(sbs::SBS &battery);
-void handleUserInput(sbs::SBS &battery);
+void readBattery(const sbs::SBS &battery);
+void handleUserInput(sbs::SBSProxy *proxy);
+void humanizeBatteryStatus(uint16_t batteryStatus);
