@@ -23,7 +23,7 @@ void setup()
     // Serial.println(F("********************************************\n"));
 
     _delay_ms(1000);  // sanity
-    proxy->enableBattery(true);  // make the battery proxy visible for the laptop
+    // proxy->enableBattery(true);  // make the battery proxy visible for the laptop
 }
 
 void loop(void)
