@@ -1,8 +1,8 @@
 #include "sbsproxy.h"
 #include <Wire.h>
 
-#define VOLTAGE_LEVEL_HIGH 12500
-#define VOLTAGE_LEVEL_LOW 9300
+#define VOLTAGE_LIMIT_HIGH 12600
+#define VOLTAGE_LIMIT_LOW 9300
 #define CAPACITY_DESIGN 2500
 
 #define CHARGING_CURRENT (CAPACITY_DESIGN / 2)
@@ -305,7 +305,7 @@ BatteryStatusFlags SBSProxy::status() const
                     _current >= 0 && relativeStateOfCharge() >= 100);
 
     considerStatusFlag(BatteryStatusFlags::OVER_CHARGED_ALARM | BatteryStatusFlags::TERMINATE_CHARGE_ALARM,
-                    _current > 0 && _voltage > VOLTAGE_LEVEL_HIGH);
+                    _current > 0 && _voltage > VOLTAGE_LIMIT_HIGH);
 
     return m_status;
 }
@@ -371,17 +371,17 @@ uint16_t SBSProxy::atRateTimeToFull() const
 uint16_t SBSProxy::remainingCapacity() const
 {
     const uint16_t _voltage = voltage();
-    const uint16_t h = VOLTAGE_LEVEL_HIGH;
-    const uint16_t l = VOLTAGE_LEVEL_LOW;
-    const int delta = _voltage - l;
-    const double k = _voltage >= h ? 1 : static_cast<double>(max(0, delta)) / (h - l);
+    const uint16_t h = VOLTAGE_LIMIT_HIGH;
+    const uint16_t l = VOLTAGE_LIMIT_LOW;
+    const double delta_to_low_limit = _voltage <= l ? 0 : _voltage - l;  // prevent values below 0
+    const double k = _voltage >= h ? 1 : delta_to_low_limit / (h - l);  // prevent values above 1
     return k * CAPACITY_DESIGN;
 }
 
 uint8_t SBSProxy::relativeStateOfCharge() const
 {
     const uint8_t percentage = remainingCapacity() * static_cast<uint32_t>(100) / CAPACITY_DESIGN;
-    return percentage;
+    return min(100, percentage);  // 0..100%
 }
 
 uint16_t SBSProxy::runTimeToEmpty() const
@@ -404,20 +404,39 @@ uint16_t SBSProxy::averageTimeToFull() const
 
 bool SBSProxy::chargingAllowed() const
 {
-    // const uint16_t _status = status();
+    static bool was_fully_charged = true; // assume charged by default
+    const uint16_t _status = status();
 
-    // // cells unbalanced
-    // if ((abs(m_cell1 - m_cell2) > 100) || (abs(m_cell2 - m_cell3) > 100) || (abs(m_cell3 - m_cell1) > 100)) {
-    //     return true;
-    // }
+    const uint16_t max_disbalance_mV = 200;
+    const uint16_t max_cell_voltage_mV = 4200;
+    const uint16_t charging_threshold_percentage = 80;
 
-    // // individual cell overcharging
-    // if ((m_cell1 > 4200) || (m_cell2 > 4200) || (m_cell3 > 4200)) {
-    //     return true;
-    // }
+    if (!was_fully_charged) {
+        was_fully_charged = _status & BatteryStatusFlags::FULLY_CHARGED;
+    }
 
+    if (was_fully_charged) {
+        // don't start charging until the battery gets discharged below the threshold
+        if (relativeStateOfCharge() > charging_threshold_percentage) {
+            return false;
+        } else {
+            was_fully_charged = false;
+        }
+    }
 
-    return true;  // FIXME: false prevents charging
+    // cells voltage disbalance
+    if ((abs(m_cell1 - m_cell2) > max_disbalance_mV) ||
+            (abs(m_cell2 - m_cell3) > max_disbalance_mV) ||
+            (abs(m_cell3 - m_cell1) > max_disbalance_mV)) {
+        return false;
+    }
+
+    // individual cell overcharging
+    if ((m_cell1 > max_cell_voltage_mV) || (m_cell2 > max_cell_voltage_mV) || (m_cell3 > max_cell_voltage_mV)) {
+        return false;
+    }
+
+    return true;
 }
 
 void SBSProxy::considerStatusFlag(BatteryStatusFlags flag, bool set_condition) const

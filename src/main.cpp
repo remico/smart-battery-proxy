@@ -1,14 +1,27 @@
 #include <Arduino.h>
 #include <AsyncDelay.h>
+#include <GyverPower.h>
 #include "battery_util.h"
 #include "sbsproxy.h"
 
 sbs::SBSProxy *proxy = sbs::SBSProxy::instance();
 AsyncDelay readInterval;
 
+void goSleep()
+{
+
+}
+
+void onWakeUp()
+{
+
+}
+
 void setup()
 {
     Serial.begin(115200);
+    // digitalWrite(0, HIGH);
+    // digitalWrite(1, HIGH);
 
     Serial.println(F("Read smart battery A2168"));
     Serial.print(F("    Battery SMBus address: 0x"));
@@ -23,18 +36,20 @@ void setup()
     // Serial.println(F("********************************************\n"));
 
     _delay_ms(1000);  // sanity
-    // proxy->enableBattery(true);  // make the battery proxy visible for the laptop
+    proxy->enableBattery(true);  // make the battery proxy visible for the laptop
 }
 
 void loop(void)
 {
+    handleUserInput(proxy);
+
     if (readInterval.isExpired())
     {
-        // do periodic things
-        humanizeBatteryStatus(proxy->status());
+        printHumanizedBatteryStatus(proxy->status());
         proxy->printPowerStats();
         readInterval.restart();
     }
 
-    handleUserInput(proxy);
+    // power.sleep(SLEEP_FOREVER);
+    // power.sleepDelay(1000);
 }

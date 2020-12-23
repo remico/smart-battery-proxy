@@ -71,7 +71,7 @@ void readBattery(const sbs::SBS &battery)
             const uint16_t batteryStatus = battery.readWord(cmd.code);
             Serial.print("0b");
             Serial.println(batteryStatus, BIN);
-            humanizeBatteryStatus(batteryStatus);
+            printHumanizedBatteryStatus(static_cast<sbs::BatteryStatusFlags>(batteryStatus));
             break;
         }
 
@@ -213,7 +213,7 @@ void handleUserInput(sbs::SBSProxy *proxy)
     }
 }
 
-void humanizeBatteryStatus(uint16_t batteryStatus)
+void printHumanizedBatteryStatus(sbs::BatteryStatusFlags batteryStatus)
 {
     String errorCode;
 
