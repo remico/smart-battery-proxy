@@ -72,6 +72,8 @@ private:
 private:
     SBSProxy();
 
+    void updateBatteryData();
+
     static void onReceive(const int number);
     static void onRequest();
 

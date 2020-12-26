@@ -1,6 +1,8 @@
 #include "sbsproxy.h"
 #include <Wire.h>
 
+#define abs_16(x) abs(static_cast<int16_t>(x))
+
 #define VOLTAGE_LIMIT_HIGH 12600
 #define VOLTAGE_LIMIT_LOW 9300
 #define CAPACITY_DESIGN 2500
@@ -11,6 +13,10 @@
 using namespace sbs;
 
 namespace {
+
+const uint16_t max_disbalance_mV = 200;
+const uint16_t max_cell_voltage_mV = 4200;
+const uint16_t charging_threshold_percentage = 80;
 
 String hex(int n)
 {
@@ -52,6 +58,26 @@ SBSProxy::SBSProxy()
 
     Wire.onReceive(onReceive);
     Wire.onRequest(onRequest);
+
+    updateBatteryData();
+}
+
+void SBSProxy::updateBatteryData()
+{
+    uint16_t temperature = battery().readWord(0x08); // ignore now
+
+    uint16_t voltage = battery().readWord(0x09);
+    setVoltage(voltage);
+
+    setCell1(battery().readWord(0x3f));
+    setCell2(battery().readWord(0x3e));
+    setCell3(battery().readWord(0x3d));
+
+    int16_t current = battery().readWord(0x0a);
+    setCurrent(current);
+
+    int16_t averageCurrent = battery().readWord(0x0b);
+    setCurrentAverage(averageCurrent);
 }
 
 SBSProxy *SBSProxy::instance()
@@ -312,6 +338,8 @@ BatteryStatusFlags SBSProxy::status() const
 
 void SBSProxy::printPowerStats()
 {
+    updateBatteryData();
+
     Serial.print(F("Voltage: "));
     Serial.print(voltage());
     Serial.print(F(" [ "));
@@ -327,6 +355,37 @@ void SBSProxy::printPowerStats()
     Serial.println(currentAverage());
     Serial.println();
 
+    // ======================================
+    // cells voltage disbalance
+    const uint16_t d12 = abs_16(cell1() - cell2());
+    const uint16_t d23 = abs_16(cell2() - cell3());
+    const uint16_t d31 = abs_16(cell3() - cell1());
+
+    // print disbalance
+    Serial.print(F("Cells voltage disbalance: "));
+    Serial.print(F(" cells 1-2 - "));
+    Serial.print(d12);
+    Serial.print(F(", cells 2-3 - "));
+    Serial.print(d23);
+    Serial.print(F(", cells 3-1 - "));
+    Serial.println(d31);
+
+    if ((cell1() > max_cell_voltage_mV) || (cell2() > max_cell_voltage_mV) || (cell3() > max_cell_voltage_mV)) {
+        Serial.println(F("[WW] Cells overvoltage"));
+    }
+
+    Serial.print(F("[II] CHARGING: "));
+    if (!chargingAllowed()) {
+        Serial.print(F("not "));
+    }
+    Serial.print(F("permitted, "));
+    if (status() & BatteryStatusFlags::DISCHARGING) {
+        Serial.print(F("in"));
+    }
+    Serial.println(F("active"));
+    Serial.println();
+
+    // ======================================
     Serial.print(F("Remaining capacity: "));
     Serial.println(remainingCapacity());
     Serial.print(F("RelativeStateOfCharge: "));
@@ -340,7 +399,6 @@ void SBSProxy::printPowerStats()
     Serial.print(F("AverageTimeToFull: "));
     Serial.println(averageTimeToFull());
     Serial.println();
-
 }
 
 void SBSProxy::answerWord(uint16_t word)
@@ -358,18 +416,19 @@ void SBSProxy::answerString(const char *str)
 
 uint16_t SBSProxy::atRateTimeToEmpty() const
 {
-    uint16_t minutes = static_cast<double>(remainingCapacity()) / abs(atRate()) * 60;
+    uint16_t minutes = static_cast<double>(remainingCapacity()) / abs_16(atRate()) * 60;
     return atRate() < 0 ? minutes : 65535;
 }
 
 uint16_t SBSProxy::atRateTimeToFull() const
 {
-    uint16_t minutes = static_cast<double>(CAPACITY_DESIGN - remainingCapacity()) / abs(atRate()) * 60;
+    uint16_t minutes = static_cast<double>(CAPACITY_DESIGN - remainingCapacity()) / abs_16(atRate()) * 60;
     return atRate() > 0 ? minutes : 65535;
 }
 
 uint16_t SBSProxy::remainingCapacity() const
 {
+    // capacity simulation for simplicity (based on voltage values only)
     const uint16_t _voltage = voltage();
     const uint16_t h = VOLTAGE_LIMIT_HIGH;
     const uint16_t l = VOLTAGE_LIMIT_LOW;
@@ -386,19 +445,19 @@ uint8_t SBSProxy::relativeStateOfCharge() const
 
 uint16_t SBSProxy::runTimeToEmpty() const
 {
-    uint16_t minutes = static_cast<double>(remainingCapacity()) / abs(current()) * 60;
+    uint16_t minutes = static_cast<double>(remainingCapacity()) / abs_16(current()) * 60;
     return current() < 0 ? minutes : 65535;
 }
 
 uint16_t SBSProxy::averageTimeToEmpty() const
 {
-    uint16_t minutes = static_cast<double>(remainingCapacity()) / abs(currentAverage()) * 60;
+    uint16_t minutes = static_cast<double>(remainingCapacity()) / abs_16(currentAverage()) * 60;
     return currentAverage() < 0 ? minutes : 65535;
 }
 
 uint16_t SBSProxy::averageTimeToFull() const
 {
-    uint16_t minutes = static_cast<double>(CAPACITY_DESIGN - remainingCapacity()) / abs(currentAverage()) * 60;
+    uint16_t minutes = static_cast<double>(CAPACITY_DESIGN - remainingCapacity()) / abs_16(currentAverage()) * 60;
     return currentAverage() > 0 ? minutes : 65535;
 }
 
@@ -406,10 +465,6 @@ bool SBSProxy::chargingAllowed() const
 {
     static bool was_fully_charged = true; // assume charged by default
     const uint16_t _status = status();
-
-    const uint16_t max_disbalance_mV = 200;
-    const uint16_t max_cell_voltage_mV = 4200;
-    const uint16_t charging_threshold_percentage = 80;
 
     if (!was_fully_charged) {
         was_fully_charged = _status & BatteryStatusFlags::FULLY_CHARGED;
@@ -425,14 +480,16 @@ bool SBSProxy::chargingAllowed() const
     }
 
     // cells voltage disbalance
-    if ((abs(m_cell1 - m_cell2) > max_disbalance_mV) ||
-            (abs(m_cell2 - m_cell3) > max_disbalance_mV) ||
-            (abs(m_cell3 - m_cell1) > max_disbalance_mV)) {
+    const uint16_t d12 = abs_16(cell1() - cell2());
+    const uint16_t d23 = abs_16(cell2() - cell3());
+    const uint16_t d31 = abs_16(cell3() - cell1());
+
+    if (d12 > max_disbalance_mV || d23 > max_disbalance_mV || d31 > max_disbalance_mV) {
         return false;
     }
 
     // individual cell overcharging
-    if ((m_cell1 > max_cell_voltage_mV) || (m_cell2 > max_cell_voltage_mV) || (m_cell3 > max_cell_voltage_mV)) {
+    if ((cell1() > max_cell_voltage_mV) || (cell2() > max_cell_voltage_mV) || (cell3() > max_cell_voltage_mV)) {
         return false;
     }
 
