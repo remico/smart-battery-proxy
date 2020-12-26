@@ -330,8 +330,11 @@ BatteryStatusFlags SBSProxy::status() const
     considerStatusFlag(BatteryStatusFlags::FULLY_CHARGED,
                     _current >= 0 && relativeStateOfCharge() >= 100);
 
-    considerStatusFlag(BatteryStatusFlags::OVER_CHARGED_ALARM | BatteryStatusFlags::TERMINATE_CHARGE_ALARM,
+    considerStatusFlag(BatteryStatusFlags::OVER_CHARGED_ALARM,
                     _current > 0 && _voltage > VOLTAGE_LIMIT_HIGH);
+
+    considerStatusFlag(BatteryStatusFlags::TERMINATE_CHARGE_ALARM,
+                    (_current > 0 && _voltage > VOLTAGE_LIMIT_HIGH) || !chargingAllowed());
 
     return m_status;
 }
@@ -464,10 +467,9 @@ uint16_t SBSProxy::averageTimeToFull() const
 bool SBSProxy::chargingAllowed() const
 {
     static bool was_fully_charged = true; // assume charged by default
-    const uint16_t _status = status();
 
     if (!was_fully_charged) {
-        was_fully_charged = _status & BatteryStatusFlags::FULLY_CHARGED;
+        was_fully_charged = m_status & BatteryStatusFlags::FULLY_CHARGED;  // !!! use m_status, not status()
     }
 
     if (was_fully_charged) {
@@ -485,13 +487,13 @@ bool SBSProxy::chargingAllowed() const
     const uint16_t d31 = abs_16(cell3() - cell1());
 
     if (d12 > max_disbalance_mV || d23 > max_disbalance_mV || d31 > max_disbalance_mV) {
-        considerStatusFlag(BatteryStatusFlags::TERMINATE_CHARGE_ALARM, true);
+        was_fully_charged = relativeStateOfCharge() > charging_threshold_percentage; // temporary solution
         return false;
     }
 
     // individual cell overcharging
     if ((cell1() > max_cell_voltage_mV) || (cell2() > max_cell_voltage_mV) || (cell3() > max_cell_voltage_mV)) {
-        considerStatusFlag(BatteryStatusFlags::TERMINATE_CHARGE_ALARM, true);
+        was_fully_charged = relativeStateOfCharge() > charging_threshold_percentage; // temporary solution
         return false;
     }
 
