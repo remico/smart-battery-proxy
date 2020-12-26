@@ -7,7 +7,7 @@
 #define VOLTAGE_LIMIT_LOW 9300
 #define CAPACITY_DESIGN 2500
 
-#define CHARGING_CURRENT (CAPACITY_DESIGN / 2)
+#define CHARGING_CURRENT (CAPACITY_DESIGN / 7)
 #define CHARGING_VOLTAGE 12600
 
 using namespace sbs;
@@ -338,7 +338,7 @@ BatteryStatusFlags SBSProxy::status() const
 
 void SBSProxy::printPowerStats()
 {
-    updateBatteryData();
+    // updateBatteryData();  don't uncomment: i2c (Wire) ISR can interfere with it and break data
 
     Serial.print(F("Voltage: "));
     Serial.print(voltage());
@@ -485,11 +485,13 @@ bool SBSProxy::chargingAllowed() const
     const uint16_t d31 = abs_16(cell3() - cell1());
 
     if (d12 > max_disbalance_mV || d23 > max_disbalance_mV || d31 > max_disbalance_mV) {
+        considerStatusFlag(BatteryStatusFlags::TERMINATE_CHARGE_ALARM, true);
         return false;
     }
 
     // individual cell overcharging
     if ((cell1() > max_cell_voltage_mV) || (cell2() > max_cell_voltage_mV) || (cell3() > max_cell_voltage_mV)) {
+        considerStatusFlag(BatteryStatusFlags::TERMINATE_CHARGE_ALARM, true);
         return false;
     }
 
