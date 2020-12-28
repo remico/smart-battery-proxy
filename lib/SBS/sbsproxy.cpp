@@ -7,7 +7,7 @@
 #define VOLTAGE_LIMIT_LOW 9300
 #define CAPACITY_DESIGN 2500
 
-#define CHARGING_CURRENT (CAPACITY_DESIGN / 7)
+#define CHARGING_CURRENT_MAX (CAPACITY_DESIGN / 2)
 #define CHARGING_VOLTAGE 12600
 
 using namespace sbs;
@@ -240,7 +240,7 @@ void SBSProxy::onRequest()
         break;
 
     case 0x14: // ChargingCurrent, mA
-        self->answerWord(self->chargingAllowed() ? CHARGING_CURRENT : 0);
+        self->answerWord(self->chargingCurrent());
         break;
     case 0x15: // ChargingVoltage, mV
         self->answerWord(self->chargingAllowed() ? CHARGING_VOLTAGE : 0);
@@ -381,12 +381,14 @@ void SBSProxy::printPowerStats()
     if (!chargingAllowed()) {
         Serial.print(F("not "));
     }
-    Serial.print(F("permitted, "));
+    Serial.print(F("permitted [ "));
+    Serial.print(chargingCurrent());
+    Serial.print(F(" mA ], "));
     if (status() & BatteryStatusFlags::DISCHARGING) {
         Serial.print(F("in"));
     }
-    Serial.println(F("active"));
-    Serial.println();
+    Serial.print(F("active"));
+    Serial.println("\n");
 
     // ======================================
     Serial.print(F("Remaining capacity: "));
@@ -462,6 +464,32 @@ uint16_t SBSProxy::averageTimeToFull() const
 {
     uint16_t minutes = static_cast<double>(CAPACITY_DESIGN - remainingCapacity()) / abs_16(currentAverage()) * 60;
     return currentAverage() > 0 ? minutes : 65535;
+}
+
+int16_t SBSProxy::chargingCurrent() const
+{
+    if (!chargingAllowed()) {
+        return 0;
+    }
+
+    static int16_t proposed_prev = CHARGING_CURRENT_MAX;  // default maximum
+    int16_t proposed_new = CHARGING_CURRENT_MAX / 7;  // default minimal
+
+    const uint16_t _voltage = voltage();
+    const int16_t _current = current();
+
+    if (_voltage < 12100) {
+        proposed_new = CHARGING_CURRENT_MAX;
+    } else if (_voltage < 12350) {
+        proposed_new = CHARGING_CURRENT_MAX / 2;
+    } else if (_voltage < 12450) {
+        proposed_new = CHARGING_CURRENT_MAX / 4;
+    }
+
+    // if isn't being charged, prefer the proposed value, else - the minimal
+    proposed_prev = _current <= 0 ? proposed_new : min(proposed_prev, proposed_new);
+
+    return proposed_prev;
 }
 
 bool SBSProxy::chargingAllowed() const

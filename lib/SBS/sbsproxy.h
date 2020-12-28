@@ -69,6 +69,8 @@ private:
     inline int16_t currentAverage() const { return m_currentAverage; }
     inline void setCurrentAverage(int16_t current) { m_currentAverage = current; }
 
+    inline int16_t chargingCurrent() const;
+
 private:
     SBSProxy();
 
