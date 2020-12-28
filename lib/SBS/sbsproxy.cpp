@@ -408,7 +408,7 @@ void SBSProxy::printPowerStats()
 
 void SBSProxy::answerWord(uint16_t word)
 {
-    uint8_t buf[2] = {static_cast<uint8_t>(word), static_cast<uint8_t>(word >> 8)};
+    uint8_t buf[2] = {lowByte(word), highByte(word)};
     Wire.write(buf, 2);
 }
 

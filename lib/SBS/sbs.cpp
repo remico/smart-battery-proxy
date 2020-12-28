@@ -133,7 +133,7 @@ void SBS::readBlock(uint8_t command, uint8_t *buf, uint8_t size) const
 
 void SBS::writeWord(uint8_t command, uint16_t value) const
 {
-    uint8_t buf[3] = {command, (uint8_t)value, (uint8_t)(value >> 8)};
+    uint8_t buf[3] = {command, lowByte(value), highByte(value)};
     I2CWrite(&m_bbi2c, m_smbusAddress, buf, sizeof(buf));
 }
 

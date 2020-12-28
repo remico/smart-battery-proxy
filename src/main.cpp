@@ -50,6 +50,8 @@ void loop(void)
         readInterval.restart();
     }
 
+    // while (Serial.availableForWrite());
+
     // power.sleep(SLEEP_FOREVER);
     // power.sleepDelay(1000);
 }
