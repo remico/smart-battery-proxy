@@ -37,6 +37,8 @@ void setup()
 
     _delay_ms(1000);  // sanity
     proxy->enableBattery(true);  // make the battery proxy visible for the laptop
+
+    power.setSleepMode(IDLE_SLEEP);
 }
 
 void loop(void)
@@ -50,8 +52,5 @@ void loop(void)
         readInterval.restart();
     }
 
-    // while (Serial.availableForWrite());
-
-    // power.sleep(SLEEP_FOREVER);
-    // power.sleepDelay(1000);
+    power.sleep(SLEEP_FOREVER);
 }
